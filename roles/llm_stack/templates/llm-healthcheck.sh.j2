@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
-# Managed by Ansible. Проверяет API и GPU; после 3 подряд неудач перезапускает контейнер модели.
+# Managed by Ansible. Проверяет LiteLLM gateway + GPU; после 3 подряд неудач перезапускает контейнер модели.
 set -u
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 STATE=/run/llm-healthcheck.fails
-URL="{{ api_scheme }}://127.0.0.1:{{ api_port }}/v1/models"
+# LiteLLM health endpoint (no auth required for liveness)
+URL="{{ api_scheme }}://127.0.0.1:{{ api_port }}/health/liveliness"
 KEY="{{ llm_api_keys | first }}"
 COMPOSE_FILE="{{ llm_dir }}/docker-compose.yml"
 
 fails=$(cat "$STATE" 2>/dev/null || echo 0)
 
-if curl -ksf --max-time 15 -H "Authorization: Bearer ${KEY}" "$URL" >/dev/null \
-   && nvidia-smi -L >/dev/null 2>&1; then
+# Проверяем: gateway жив + GPU виден + модель отвечает (через /v1/models с ключом)
+if curl -ksf --max-time 10 "$URL" >/dev/null \
+   && nvidia-smi -L >/dev/null 2>&1 \
+   && curl -ksf --max-time 15 -H "Authorization: Bearer ${KEY}" "{{ api_scheme }}://127.0.0.1:{{ api_port }}/v1/models" >/dev/null; then
   echo 0 > "$STATE"
   exit 0
 fi

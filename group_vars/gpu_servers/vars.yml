@@ -27,15 +27,21 @@ ollama_image: ollama/ollama:latest
 
 llm_internal_port: "{{ 8000 if llm_engine == 'vllm' else 11434 }}"
 
-# ───────── API-шлюз (nginx) ─────────
-nginx_image: nginx:1.27-alpine
+# ───────── API-шлюз (LiteLLM) ─────────
+litellm_image: ghcr.io/berriai/litellm:main-stable
 api_tls_enabled: true                     # самоподписанный сертификат; в проде замените на настоящий
 api_port: 443
 api_bind: "0.0.0.0"
 api_scheme: "{{ 'https' if api_tls_enabled else 'http' }}"
-api_rate_limit: 10r/s
-api_allowed_cidrs: ["0.0.0.0/0"]          # ограничьте до подсетей клиентов
-# llm_api_keys и hf_token — в group_vars/gpu_servers/vault.yml (ansible-vault)
+
+# LiteLLM rate limits (per key)
+litellm_rate_limit_rpm: 600               # запросов в минуту на ключ
+litellm_rate_limit_tpm: 100000            # токенов в минуту на ключ
+
+# LiteLLM IP allow-list (опционально)
+# litellm_allowed_cidrs: ["10.0.0.0/8", "192.168.0.0/16"]
+
+# llm_api_keys, litellm_master_key, hf_token — в group_vars/gpu_servers/vault.yml (ansible-vault)
 
 # ───────── Мониторинг GPU ─────────
 dcgm_enabled: true

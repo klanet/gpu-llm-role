@@ -8,7 +8,6 @@
     - "{{ llm_dir }}"
     - "{{ llm_dir }}/hf-cache"
     - "{{ llm_dir }}/ollama"
-    - "{{ llm_dir }}/nginx"
     - "{{ llm_dir }}/certs"
 
 - name: Generate self-signed TLS certificate (replace with a real one in production)
@@ -28,10 +27,10 @@
       HF_TOKEN={{ hf_token | default('') }}
   no_log: true
 
-- name: Render nginx config (API-key auth, rate limit, streaming)
+- name: Render LiteLLM config (API-key auth, rate limit, model routing)
   ansible.builtin.template:
-    src: nginx.conf.j2
-    dest: "{{ llm_dir }}/nginx/default.conf"
+    src: litellm-config.yaml.j2
+    dest: "{{ llm_dir }}/litellm-config.yaml"
     mode: "0600"
   no_log: true
 

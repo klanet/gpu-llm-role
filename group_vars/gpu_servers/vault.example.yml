@@ -2,4 +2,5 @@
 ---
 llm_api_keys:
   - "sk-REPLACE-ME-with-output-of-openssl-rand-hex-32"
+litellm_master_key: "sk-REPLACE-ME-with-openssl-rand-hex-32"  # мастер-ключ для админки LiteLLM
 hf_token: ""            # нужен только для gated-моделей (Llama и т.п.)

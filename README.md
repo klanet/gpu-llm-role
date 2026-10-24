@@ -16,16 +16,16 @@
 | **Проверка работоспособности** | Smoke-тест в плейбуке: драйвер, GPU в контейнере, загрузка модели, реальный chat-запрос, 401 без ключа |
 | **README с инструкцией и примером API** | Этот файл |
 | **Мониторинг GPU (доп.)** | `dcgm-exporter` → метрики на `:9400/metrics` (Prometheus/Grafana) |
-| **Защита API (доп.)** | nginx gateway: TLS, Bearer-ключи, IP allow-list, rate limit, порт модели не публикуется |
+| **Защита API (доп.)** | LiteLLM gateway: TLS, Bearer-ключи, master-key, IP allow-list, rate limit, модель не публикуется |
 
 ---
 
 ## Архитектура
 
 ```
-Клиент ──HTTPS + Bearer-ключ──► nginx (gateway) ──► vLLM / Ollama ──► GPU
+Клиент ──HTTPS + Bearer-ключ──► LiteLLM (gateway) ──► vLLM / Ollama ──► GPU
                                  │ TLS, API-ключи,       (порт не публикуется,
-                                 │ rate limit, allow-list  доступен только шлюзу)
+                                 │ rate limit, master-key  доступен только шлюзу)
                                  ▼
                            dcgm-exporter :9400 ──► Prometheus/Grafana
 systemd timer (2 мин) ──► проверка API + nvidia-smi ──► рестарт при 3 сбоях
@@ -83,7 +83,7 @@ ansible-playbook site.yml --check --diff  # dry-run
     ├── common/                       # базовая ОС, UFW, проверки
     ├── nvidia_driver/                # драйвер NVIDIA
     ├── docker_nvidia/                # Docker + NVIDIA Toolkit
-    └── llm_stack/                    # LLM + nginx + dcgm + watchdog
+    └── llm_stack/                    # LLM + LiteLLM + dcgm + watchdog
 ```
 
 ---
@@ -104,11 +104,13 @@ vllm_extra_args:                                 # под VRAM
   - "--max-model-len"; "8192"
   - "--gpu-memory-utilization"; "0.90"
 
-# ───────── API-шлюз (nginx) ─────────
+# ───────── API-шлюз (LiteLLM) ─────────
+litellm_image: ghcr.io/berriai/litellm:main-stable
 api_tls_enabled: true                            # самоподписанный, в проде — настоящий
 api_port: 443
-api_rate_limit: 10r/s
-api_allowed_cidrs: ["0.0.0.0/0"]                 # ОБЯЗАТЕЛЬНО ограничьте подсетями клиентов
+litellm_rate_limit_rpm: 600                      # запросов в минуту на ключ
+litellm_rate_limit_tpm: 100000                   # токенов в минуту на ключ
+# litellm_allowed_cidrs: ["10.0.0.0/8"]          # опционально: IP allow-list
 
 # ───────── Мониторинг GPU ─────────
 dcgm_enabled: true
@@ -119,6 +121,7 @@ dcgm_bind_address: 127.0.0.1                     # для Prometheus — при�
 ```yaml
 llm_api_keys:
   - "sk-ваш-ключ"
+litellm_master_key: "sk-ваш-мастер-ключ"  # для админки LiteLLM
 hf_token: ""  # для gated-моделей (Llama и др.)
 ```
 
@@ -202,21 +205,22 @@ journalctl -t llm-healthcheck                 # события автовосс�
 
 - ✅ Порт модели (8000/11434) **не опубликован** наружу
 - ✅ TLS на шлюзе (самоподписанный, замените в проде)
-- ✅ Bearer-авторизация по списку ключей
-- ✅ IP allow-list (`api_allowed_cidrs`) — **ограничьте!**
-- ✅ Rate limit 10 r/s (burst 20)
+- ✅ Bearer-авторизация по списку ключей (`llm_api_keys`)
+- ✅ Master-key для админки LiteLLM (`litellm_master_key`)
+- ✅ IP allow-list (`litellm_allowed_cidrs`) — **ограничьте!**
+- ✅ Rate limit (настраиваемый: `litellm_rate_limit_rpm`/`tpm`)
 - ✅ Ключи в `ansible-vault`, конфиги `0600`
 - ✅ UFW deny-by-default (только SSH + API порт)
 - ✅ Драйвер и Docker **не обновляются автоматически** (apt blacklist)
 
-> Docker обходит UFW для опубликованных портов — защита на уровне nginx (`api_allowed_cidrs`) и привязка dcgm к конкретному IP.
+> Docker обходит UFW для опубликованных портов — защита на уровне LiteLLM (`litellm_allowed_cidrs`) и привязка dcgm к конкретному IP.
 
 ---
 
 ## Дополнительные улучшения (roadmap)
 
 - **Настоящий TLS:** Let's Encrypt / Caddy / Cloudflare Tunnel; mTLS
-- **Управление ключами:** LiteLLM Proxy (ключи на пользователя, бюджеты, fallback)
+- ✅ **Управление ключами:** LiteLLM Proxy (ключи на пользователя, rate limits, master-key) — **реализовано**
 - **Секреты:** HashiCorp Vault / SOPS вместо ansible-vault
 - **Масштабирование:** несколько GPU-нод, `--tensor-parallel-size`, k3s + GPU Operator, KServe
 - **Кэш образов/весов:** приватный registry + S3/NFS для независимости от Hugging Face
