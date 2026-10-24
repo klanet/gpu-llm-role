@@ -4,6 +4,17 @@
     file: distro.yml
     name: distro
 
+- name: Install kernel headers and DKMS (required for NVIDIA driver build)
+  ansible.builtin.package:
+    name: "{{ distro.__distro_packages[ansible_os_family].kernel_headers_packages }}"
+    state: present
+    update_cache: true
+
+- name: Install DKMS
+  ansible.builtin.package:
+    name: "{{ distro.__distro_packages[ansible_os_family].dkms_packages }}"
+    state: present
+
 - name: Blacklist nouveau
   ansible.builtin.copy:
     dest: /etc/modprobe.d/blacklist-nouveau.conf
@@ -16,7 +27,7 @@
 - name: Apply handlers before driver install
   ansible.builtin.meta: flush_handlers
 
-- name: Install NVIDIA driver
+- name: Install NVIDIA driver (pulls in nvidia-dkms, nvidia-kernel-common, etc.)
   ansible.builtin.package:
     name: "{{ nvidia_driver_package }}"
     state: present
@@ -28,7 +39,7 @@
   changed_when: false
   failed_when: false
 
-- name: Reboot to load the driver
+- name: Reboot to load the driver (first boot after install)
   ansible.builtin.reboot:
     reboot_timeout: 900
   when: nvidia_smi.rc != 0 and nvidia_allow_reboot
@@ -51,3 +62,42 @@
     enabled: true
     state: started
   failed_when: false
+
+- name: Verify persistence daemon is running
+  ansible.builtin.systemd:
+    name: nvidia-persistenced
+    state: started
+  register: persistenced_status
+  failed_when: false
+
+- name: Ensure NVIDIA kernel module loads on boot (modules-load.d)
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/nvidia.conf
+    mode: "0644"
+    content: |
+      # Load NVIDIA kernel modules at boot
+      nvidia
+      nvidia_uvm
+      nvidia_modeset
+      nvidia_drm
+
+- name: Configure NVIDIA DRM modeset (prevents screen tearing, enables Wayland)
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/nvidia-drm.conf
+    mode: "0644"
+    content: |
+      options nvidia_drm modeset=1 fbdev=1
+
+- name: Update initramfs with new modules config
+  ansible.builtin.meta: flush_handlers
+
+- name: Check Secure Boot status (informational)
+  ansible.builtin.command: mokutil --sb-state
+  register: secure_boot
+  changed_when: false
+  failed_when: false
+
+- name: Warn if Secure Boot is enabled (driver may not load without MOK enrollment)
+  ansible.builtin.debug:
+    msg: "ВНИМАНИЕ: Secure Boot включён ({{ secure_boot.stdout }}). Драйвер NVIDIA может не загрузиться без MOK enrollment. Выполните вручную: mokutil --import /var/lib/shim-signed/mok/MOK.der && reboot"
+  when: secure_boot.rc == 0 and 'enabled' in secure_boot.stdout.lower()

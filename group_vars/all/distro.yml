@@ -12,7 +12,6 @@ __distro_packages:
       - pciutils
       - jq
       - openssl
-      - linux-headers-generic
     firewall_packages:
       - ufw
     firewall_module: community.general.ufw
@@ -30,6 +29,12 @@ __distro_packages:
     nvidia_ctk_gpg_url: "https://nvidia.github.io/libnvidia-container/gpgkey"
     nvidia_ctk_packages:
       - nvidia-container-toolkit
+    # Kernel headers matching running kernel (meta-package pulls correct version)
+    kernel_headers_packages:
+      - linux-headers-generic
+      - linux-headers-{{ ansible_kernel }}
+    dkms_packages:
+      - dkms
     initramfs_cmd: update-initramfs -u
     unattended_upgrades_config: /etc/apt/apt.conf.d/52-gpu-blacklist
 
@@ -42,8 +47,6 @@ __distro_packages:
       - pciutils
       - jq
       - openssl
-      - kernel-devel
-      - kernel-headers
     firewall_packages:
       - firewalld
     firewall_module: ansible.posix.firewalld
@@ -62,6 +65,12 @@ __distro_packages:
     nvidia_ctk_gpg_url: "https://nvidia.github.io/libnvidia-container/gpgkey"
     nvidia_ctk_packages:
       - nvidia-container-toolkit
+    # Kernel headers matching running kernel
+    kernel_headers_packages:
+      - kernel-devel-{{ ansible_kernel }}
+      - kernel-headers-{{ ansible_kernel }}
+    dkms_packages:
+      - dkms
     initramfs_cmd: dracut --force
     unattended_upgrades_config: /etc/dnf/automatic.conf
 
@@ -74,7 +83,6 @@ __distro_packages:
       - pciutils
       - jq
       - openssl
-      - linux-headers
     firewall_packages:
       - ufw
     firewall_module: community.general.ufw
@@ -90,6 +98,11 @@ __distro_packages:
     nvidia_ctk_gpg_url: ""
     nvidia_ctk_packages:
       - nvidia-container-toolkit
+    # Kernel headers matching running kernel
+    kernel_headers_packages:
+      - linux-headers
+    dkms_packages:
+      - dkms
     initramfs_cmd: mkinitcpio -P
     unattended_upgrades_config: ""  # Not applicable
 
