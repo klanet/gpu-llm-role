@@ -1,0 +1,58 @@
+# Managed by Ansible - не редактируйте вручную
+general_settings:
+  master_key: "{{ litellm_master_key | default('') }}"
+  # disable_spend_logs: true  # отключить логирование затрат в БД
+
+model_list:
+  - model_name: "{{ llm_model }}"
+    litellm_params:
+      model: "{{ llm_model }}"
+      api_base: "http://llm:{{ llm_internal_port }}/v1"
+      api_key: "dummy"  # vLLM/Ollama не требуют ключ, но LiteLLM требует поле
+      custom_llm_provider: "openai"
+
+router_settings:
+  routing_strategy: "simple-shuffle"
+  # fallback_models: []  # можно добавить резервные модели
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false
+  json_logs: true
+  # request_timeout: 600
+  # max_retries: 3
+
+# Rate limiting (per key)
+rate_limit:
+  - requests: {{ litellm_rate_limit_rpm | default(600) }}
+    window: 60
+    key: "key"
+
+# API key authentication
+allowed_keys:
+{% for key in llm_api_keys %}
+  - key: "{{ key }}"
+    models:
+      - "{{ llm_model }}"
+    rpm: {{ litellm_rate_limit_rpm | default(600) }}
+    tpm: {{ litellm_rate_limit_tpm | default(100000) }}
+    metadata:
+      created_by: "ansible"
+{% endfor %}
+
+# IP allow-list (optional)
+{% if litellm_allowed_cidrs is defined and litellm_allowed_cidrs | length > 0 %}
+ip_allowlist:
+{% for cidr in litellm_allowed_cidrs %}
+  - "{{ cidr }}"
+{% endfor %}
+{% endif %}
+
+# Callbacks / logging (optional)
+# success_callback: ["langfuse"]
+# failure_callback: ["langfuse"]
+
+# UI (optional, для админки)
+# ui:
+#   enabled: true
+#   path: "/ui"
