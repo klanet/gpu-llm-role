@@ -1,14 +1,18 @@
 ---
-- name: Check supported OS
+- name: Include distro-specific variables
+  ansible.builtin.include_vars:
+    file: distro.yml
+    name: distro
+
+- name: Check supported OS family
   ansible.builtin.assert:
     that:
-      - ansible_distribution == 'Ubuntu'
-      - ansible_distribution_version is version('22.04', '>=')
-    fail_msg: "Поддерживается Ubuntu 22.04+"
+      - ansible_os_family in distro.__distro_packages
+    fail_msg: "Поддерживаемые OS family: {{ distro.__distro_packages.keys() | list }}. Текущий: {{ ansible_os_family }}"
 
 - name: Install base packages
-  ansible.builtin.apt:
-    name: [ca-certificates, curl, gnupg, pciutils, ufw, jq, openssl, linux-headers-generic, unattended-upgrades]
+  ansible.builtin.package:
+    name: "{{ distro.__distro_packages[ansible_os_family].base_packages }}"
     state: present
     update_cache: true
     cache_valid_time: 3600
@@ -44,9 +48,10 @@
 
 - name: Do not auto-upgrade GPU stack (driver/Docker upgrades only via playbook)
   ansible.builtin.copy:
-    dest: /etc/apt/apt.conf.d/52-gpu-blacklist
+    dest: "{{ distro.__distro_packages[ansible_os_family].unattended_upgrades_config }}"
     mode: "0644"
     content: |
+      {% if ansible_os_family == 'Debian' %}
       Unattended-Upgrade::Package-Blacklist {
         "nvidia-";
         "libnvidia-";
@@ -54,24 +59,58 @@
         "docker-ce";
         "containerd.io";
       };
+      {% elif ansible_os_family == 'RedHat' %}
+      [commands]
+      exclude = nvidia-*,libnvidia-*,docker-*,containerd.io
+      {% endif %}
+  when: distro.__distro_packages[ansible_os_family].unattended_upgrades_config != ""
 
-- name: UFW - allow SSH
-  community.general.ufw:
-    rule: allow
-    port: "{{ ssh_port }}"
-    proto: tcp
+- name: Install firewall packages
+  ansible.builtin.package:
+    name: "{{ distro.__distro_packages[ansible_os_family].firewall_packages }}"
+    state: present
+  when: ufw_enabled or firewalld_enabled
+
+- name: Configure UFW (Debian/Ubuntu/Arch)
+  block:
+    - name: UFW - allow SSH
+      community.general.ufw:
+        rule: allow
+        port: "{{ ssh_port }}"
+        proto: tcp
+
+    - name: UFW - allow API port
+      community.general.ufw:
+        rule: allow
+        port: "{{ api_port }}"
+        proto: tcp
+
+    - name: UFW - enable, deny incoming by default
+      community.general.ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
   when: ufw_enabled
 
-- name: UFW - allow API port
-  community.general.ufw:
-    rule: allow
-    port: "{{ api_port }}"
-    proto: tcp
-  when: ufw_enabled
+- name: Configure firewalld (RHEL/CentOS/Fedora)
+  block:
+    - name: firewalld - allow SSH
+      ansible.posix.firewalld:
+        port: "{{ ssh_port }}/tcp"
+        permanent: true
+        immediate: true
+        state: enabled
 
-- name: UFW - enable, deny incoming by default
-  community.general.ufw:
-    state: enabled
-    policy: deny
-    direction: incoming
-  when: ufw_enabled
+    - name: firewalld - allow API port
+      ansible.posix.firewalld:
+        port: "{{ api_port }}/tcp"
+        permanent: true
+        immediate: true
+        state: enabled
+
+    - name: firewalld - enable and start
+      ansible.builtin.systemd:
+        name: firewalld
+        enabled: true
+        state: started
+  when: firewalld_enabled

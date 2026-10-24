@@ -1,11 +1,14 @@
 ---
 # ───────── Система ─────────
 ssh_port: 22
-ufw_enabled: true
+# ufw_enabled / firewalld_enabled — определяются автоматически по ОС в distro.yml
 
 # ───────── NVIDIA ─────────
 # Версия драйвера должна поддерживать CUDA из образа движка (vLLM ≥0.10 → CUDA 12.8 → драйвер ≥ 570).
-nvidia_driver_package: nvidia-driver-570-server
+# nvidia_driver_package задаётся автоматически в distro.yml, можно переопределить:
+# nvidia_driver_package: nvidia-driver-570-server  # Ubuntu/Debian
+# nvidia_driver_package: nvidia-driver            # RHEL/Rocky/Alma
+# nvidia_driver_package: nvidia                   # Arch
 nvidia_allow_reboot: true                 # перезагружать сервер, если драйвер ещё не загружен
 cuda_test_image: nvidia/cuda:12.4.1-base-ubuntu22.04
 

@@ -1,6 +1,6 @@
 # Автоматизация развёртывания GPU-сервера для LLM (Ansible)
 
-**Задача:** Написать Ansible Playbook для настройки GPU-сервера (Ubuntu + NVIDIA) и запуска LLM-модели с доступом через API.
+**Задача:** Написать Ansible Playbook для настройки GPU-сервера (Linux + NVIDIA) и запуска LLM-модели с доступом через API.
 
 ---
 
@@ -8,9 +8,9 @@
 
 | Требование задачи | Реализация |
 |-------------------|------------|
-| **ОС — Ubuntu, GPU — NVIDIA** | Проверка Ubuntu 22.04+, наличия GPU на PCI шине |
-| **Настроить драйверы** | Роль `nvidia_driver`: blacklist nouveau, `nvidia-driver-<N>-server`, persistence-демон, авто-reboot при необходимости |
-| **Настроить Docker и окружение** | Роль `docker_nvidia`: Docker CE + Compose plugin, NVIDIA Container Toolkit, тест `docker run --gpus all nvidia-smi` |
+| **ОС — Linux, GPU — NVIDIA** | Поддержка Ubuntu 22.04+, Debian 11+, RHEL 8/9, Rocky/AlmaLinux 8/9, Fedora, Arch Linux; проверка GPU на PCI шине |
+| **Настроить драйверы** | Роль `nvidia_driver`: blacklist nouveau, драйвер из репозитория ОС, persistence-демон, авто-reboot при необходимости |
+| **Настроить Docker и окружение** | Роль `docker_nvidia`: Docker CE/Engine + Compose plugin, NVIDIA Container Toolkit, тест `docker run --gpus all nvidia-smi` |
 | **Развернуть AI-модель (Ollama / vLLM)** | Роль `llm_stack`: docker-compose с выбором движка (`llm_engine: vllm \| ollama`), моделью (`llm_model`), автозагрузкой весов |
 | **Автоматический запуск** | Docker в systemd, контейнеры `restart: unless-stopped` → стек поднимается после перезагрузки |
 | **Проверка работоспособности** | Smoke-тест в плейбуке: драйвер, GPU в контейнере, загрузка модели, реальный chat-запрос, 401 без ключа |
@@ -68,19 +68,32 @@ ansible-playbook site.yml --check --diff  # dry-run
 
 ---
 
+## Поддерживаемые ОС
+
+| OS Family | Дистрибутивы | Пакетный менеджер | Firewall |
+|-----------|--------------|-------------------|----------|
+| **Debian** | Ubuntu 22.04+, Debian 11/12 | `apt` | UFW |
+| **RedHat** | RHEL 8/9, Rocky 8/9, AlmaLinux 8/9, CentOS Stream 8/9, Fedora 38+ | `dnf` | firewalld |
+| **Archlinux** | Arch Linux, Manjaro | `pacman` | UFW |
+
+> Автоматически определяется по `ansible_os_family`. Переменные пакетов и репозиториев настраиваются в `group_vars/all/distro.yml`.
+
 ## Структура проекта
 
 ```
 .
 ├── site.yml                          # главный плейбук (4 роли)
 ├── inventory/hosts.yml               # серверы (отредактируйте IP/ключ)
-├── group_vars/gpu_servers/
-│   ├── vars.yml                      # все настройки
-│   └── vault.example.yml             # пример секретов
-├── requirements.yml                  # community.general, community.docker
+├── group_vars/
+│   ├── all/
+│   │   └── distro.yml                # настройки под конкретную ОС (авто)
+│   └── gpu_servers/
+│       ├── vars.yml                  # все настройки
+│       └── vault.example.yml         # пример секретов
+├── requirements.yml                  # community.general, community.docker, ansible.posix
 ├── ansible.cfg                       # конфиг Ansible
 └── roles/
-    ├── common/                       # базовая ОС, UFW, проверки
+    ├── common/                       # базовая ОС, firewall, проверки
     ├── nvidia_driver/                # драйвер NVIDIA
     ├── docker_nvidia/                # Docker + NVIDIA Toolkit
     └── llm_stack/                    # LLM + LiteLLM + dcgm + watchdog

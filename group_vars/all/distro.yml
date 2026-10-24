@@ -1,0 +1,110 @@
+---
+# Distribution-specific variables
+# This file maps ansible_os_family / ansible_distribution to package names and commands
+
+__distro_packages:
+  Debian:
+    # Debian 11+, Ubuntu 22.04+
+    base_packages:
+      - ca-certificates
+      - curl
+      - gnupg
+      - pciutils
+      - jq
+      - openssl
+      - linux-headers-generic
+    firewall_packages:
+      - ufw
+    firewall_module: community.general.ufw
+    docker_repo_url: "https://download.docker.com/linux/{{ ansible_distribution | lower }}"
+    docker_gpg_url: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"
+    docker_packages:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    nvidia_driver_packages:
+      - nvidia-driver-570-server
+    nvidia_ctk_repo_url: "https://nvidia.github.io/libnvidia-container/stable/deb/$(ARCH) /"
+    nvidia_ctk_gpg_url: "https://nvidia.github.io/libnvidia-container/gpgkey"
+    nvidia_ctk_packages:
+      - nvidia-container-toolkit
+    initramfs_cmd: update-initramfs -u
+    unattended_upgrades_config: /etc/apt/apt.conf.d/52-gpu-blacklist
+
+  RedHat:
+    # RHEL 8/9, CentOS 8/9, Rocky 8/9, AlmaLinux 8/9, Fedora
+    base_packages:
+      - ca-certificates
+      - curl
+      - gnupg2
+      - pciutils
+      - jq
+      - openssl
+      - kernel-devel
+      - kernel-headers
+    firewall_packages:
+      - firewalld
+    firewall_module: ansible.posix.firewalld
+    docker_repo_url: "https://download.docker.com/linux/centos"
+    docker_gpg_url: "https://download.docker.com/linux/centos/gpg"
+    docker_packages:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    nvidia_driver_packages:
+      - nvidia-driver
+      - nvidia-driver-cuda
+    nvidia_ctk_repo_url: "https://nvidia.github.io/libnvidia-container/stable/rpm/$(ARCH) /"
+    nvidia_ctk_gpg_url: "https://nvidia.github.io/libnvidia-container/gpgkey"
+    nvidia_ctk_packages:
+      - nvidia-container-toolkit
+    initramfs_cmd: dracut --force
+    unattended_upgrades_config: /etc/dnf/automatic.conf
+
+  Archlinux:
+    # Arch Linux, Manjaro
+    base_packages:
+      - ca-certificates
+      - curl
+      - gnupg
+      - pciutils
+      - jq
+      - openssl
+      - linux-headers
+    firewall_packages:
+      - ufw
+    firewall_module: community.general.ufw
+    docker_repo_url: ""  # Use official Arch repos
+    docker_gpg_url: ""
+    docker_packages:
+      - docker
+      - docker-compose
+    nvidia_driver_packages:
+      - nvidia
+      - nvidia-utils
+    nvidia_ctk_repo_url: ""  # Use AUR or official
+    nvidia_ctk_gpg_url: ""
+    nvidia_ctk_packages:
+      - nvidia-container-toolkit
+    initramfs_cmd: mkinitcpio -P
+    unattended_upgrades_config: ""  # Not applicable
+
+# Default values (can be overridden per distro in vars.yml)
+nvidia_driver_package: "{{ __distro_packages[ansible_os_family].nvidia_driver_packages[0] }}"
+nvidia_allow_reboot: true
+cuda_test_image: nvidia/cuda:12.4.1-base-ubuntu22.04  # generic test image
+
+# Firewall
+ufw_enabled: "{{ ansible_os_family == 'Debian' or ansible_os_family == 'Archlinux' }}"
+firewalld_enabled: "{{ ansible_os_family == 'RedHat' }}"
+ssh_port: 22
+
+# Package manager
+__pkg_mgr:
+  Debian: apt
+  RedHat: dnf
+  Archlinux: pacman

@@ -1,43 +1,60 @@
 ---
-- name: Create keyrings dir
+- name: Include distro-specific variables
+  ansible.builtin.include_vars:
+    file: distro.yml
+    name: distro
+
+- name: Create keyrings dir (Debian/Ubuntu)
   ansible.builtin.file:
     path: /etc/apt/keyrings
     state: directory
     mode: "0755"
+  when: ansible_os_family == 'Debian'
 
-- name: Add Docker GPG key
+- name: Add Docker GPG key (Debian/Ubuntu)
   ansible.builtin.get_url:
-    url: https://download.docker.com/linux/ubuntu/gpg
+    url: "{{ distro.__distro_packages[ansible_os_family].docker_gpg_url }}"
     dest: /etc/apt/keyrings/docker.asc
     mode: "0644"
+  when: ansible_os_family == 'Debian' and distro.__distro_packages[ansible_os_family].docker_gpg_url != ""
 
-- name: Add Docker apt repository
+- name: Add Docker apt repository (Debian/Ubuntu)
   ansible.builtin.apt_repository:
-    repo: "deb [arch={{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    repo: "deb [arch={{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }} signed-by=/etc/apt/keyrings/docker.asc] {{ distro.__distro_packages[ansible_os_family].docker_repo_url }} {{ ansible_distribution_release }} stable"
     filename: docker
     state: present
+  when: ansible_os_family == 'Debian' and distro.__distro_packages[ansible_os_family].docker_repo_url != ""
 
-- name: Add NVIDIA Container Toolkit GPG key
+- name: Add Docker dnf/yum repository (RHEL/Fedora)
+  ansible.builtin.dnf:
+    name: "{{ distro.__distro_packages[ansible_os_family].docker_repo_url }}/docker-ce.repo"
+    state: present
+  when: ansible_os_family == 'RedHat'
+  # Note: For RHEL, better to use the official install script or repo file
+
+- name: Add NVIDIA Container Toolkit GPG key (Debian/Ubuntu)
   ansible.builtin.get_url:
-    url: https://nvidia.github.io/libnvidia-container/gpgkey
+    url: "{{ distro.__distro_packages[ansible_os_family].nvidia_ctk_gpg_url }}"
     dest: /etc/apt/keyrings/nvidia-container-toolkit.asc
     mode: "0644"
+  when: ansible_os_family == 'Debian' and distro.__distro_packages[ansible_os_family].nvidia_ctk_gpg_url != ""
 
-- name: Add NVIDIA Container Toolkit apt repository
+- name: Add NVIDIA Container Toolkit apt repository (Debian/Ubuntu)
   ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/etc/apt/keyrings/nvidia-container-toolkit.asc] https://nvidia.github.io/libnvidia-container/stable/deb/$(ARCH) /"
+    repo: "deb [signed-by=/etc/apt/keyrings/nvidia-container-toolkit.asc] {{ distro.__distro_packages[ansible_os_family].nvidia_ctk_repo_url }}"
     filename: nvidia-container-toolkit
     state: present
+  when: ansible_os_family == 'Debian' and distro.__distro_packages[ansible_os_family].nvidia_ctk_repo_url != ""
+
+- name: Add NVIDIA Container Toolkit dnf/yum repository (RHEL/Fedora)
+  ansible.builtin.dnf:
+    name: "{{ distro.__distro_packages[ansible_os_family].nvidia_ctk_repo_url }}/nvidia-container-toolkit.repo"
+    state: present
+  when: ansible_os_family == 'RedHat'
 
 - name: Install Docker and NVIDIA Container Toolkit
-  ansible.builtin.apt:
-    name:
-      - docker-ce
-      - docker-ce-cli
-      - containerd.io
-      - docker-buildx-plugin
-      - docker-compose-plugin
-      - nvidia-container-toolkit
+  ansible.builtin.package:
+    name: "{{ distro.__distro_packages[ansible_os_family].docker_packages + distro.__distro_packages[ansible_os_family].nvidia_ctk_packages }}"
     state: present
     update_cache: true
 

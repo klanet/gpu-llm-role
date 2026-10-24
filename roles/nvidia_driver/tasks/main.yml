@@ -1,4 +1,9 @@
 ---
+- name: Include distro-specific variables
+  ansible.builtin.include_vars:
+    file: distro.yml
+    name: distro
+
 - name: Blacklist nouveau
   ansible.builtin.copy:
     dest: /etc/modprobe.d/blacklist-nouveau.conf
@@ -12,7 +17,7 @@
   ansible.builtin.meta: flush_handlers
 
 - name: Install NVIDIA driver
-  ansible.builtin.apt:
+  ansible.builtin.package:
     name: "{{ nvidia_driver_package }}"
     state: present
     update_cache: true

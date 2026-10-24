@@ -1,3 +1,17 @@
 ---
 - name: update initramfs
-  ansible.builtin.command: update-initramfs -u
+  ansible.builtin.include_vars:
+    file: distro.yml
+    name: distro
+
+- name: update initramfs (Debian/Ubuntu)
+  ansible.builtin.command: "{{ distro.__distro_packages[ansible_os_family].initramfs_cmd }}"
+  when: ansible_os_family in ['Debian']
+
+- name: update initramfs (RHEL/Fedora)
+  ansible.builtin.command: "{{ distro.__distro_packages[ansible_os_family].initramfs_cmd }}"
+  when: ansible_os_family in ['RedHat']
+
+- name: update initramfs (Arch)
+  ansible.builtin.command: "{{ distro.__distro_packages[ansible_os_family].initramfs_cmd }}"
+  when: ansible_os_family in ['Archlinux']
