@@ -1,0 +1,44 @@
+---
+# ───────── Система ─────────
+ssh_port: 22
+ufw_enabled: true
+
+# ───────── NVIDIA ─────────
+# Версия драйвера должна поддерживать CUDA из образа движка (vLLM ≥0.10 → CUDA 12.8 → драйвер ≥ 570).
+nvidia_driver_package: nvidia-driver-570-server
+nvidia_allow_reboot: true                 # перезагружать сервер, если драйвер ещё не загружен
+cuda_test_image: nvidia/cuda:12.4.1-base-ubuntu22.04
+
+# ───────── LLM ─────────
+llm_engine: vllm                          # vllm | ollama
+llm_model: Qwen/Qwen2.5-7B-Instruct-AWQ   # vLLM: HF-id; Ollama: тег (напр. qwen2.5:7b-instruct)
+llm_dir: /opt/llm
+
+vllm_image: vllm/vllm-openai:v0.10.2      # ЗАФИКСИРУЙТЕ версию; проверьте актуальный тег
+vllm_extra_args:
+  - "--dtype"
+  - "half"                                # T4/V100 не поддерживают bf16
+  - "--max-model-len"
+  - "8192"
+  - "--gpu-memory-utilization"
+  - "0.90"
+vllm_env: {}                              # напр. { VLLM_USE_V1: "0" } для старых GPU (Turing/T4)
+ollama_image: ollama/ollama:latest
+
+llm_internal_port: "{{ 8000 if llm_engine == 'vllm' else 11434 }}"
+
+# ───────── API-шлюз (nginx) ─────────
+nginx_image: nginx:1.27-alpine
+api_tls_enabled: true                     # самоподписанный сертификат; в проде замените на настоящий
+api_port: 443
+api_bind: "0.0.0.0"
+api_scheme: "{{ 'https' if api_tls_enabled else 'http' }}"
+api_rate_limit: 10r/s
+api_allowed_cidrs: ["0.0.0.0/0"]          # ограничьте до подсетей клиентов
+# llm_api_keys и hf_token — в group_vars/gpu_servers/vault.yml (ansible-vault)
+
+# ───────── Мониторинг GPU ─────────
+dcgm_enabled: true
+dcgm_image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.1-ubuntu22.04   # проверьте актуальный тег
+dcgm_bind_address: 127.0.0.1              # поставьте приватный IP, чтобы Prometheus мог скрейпить
+dcgm_port: 9400

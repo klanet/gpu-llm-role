@@ -1,0 +1,45 @@
+# Managed by Ansible
+map $http_authorization $api_key_ok {
+    default 0;
+{% for k in llm_api_keys %}
+    "Bearer {{ k }}" 1;
+{% endfor %}
+}
+
+limit_req_zone $binary_remote_addr zone=api:10m rate={{ api_rate_limit }};
+
+server {
+{% if api_tls_enabled %}
+    listen 443 ssl;
+    ssl_certificate     /etc/nginx/certs/tls.crt;
+    ssl_certificate_key /etc/nginx/certs/tls.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+{% else %}
+    listen 80;
+{% endif %}
+
+    client_max_body_size 10m;
+
+{% for cidr in api_allowed_cidrs %}
+    allow {{ cidr }};
+{% endfor %}
+    deny all;
+
+    # Проверка самого шлюза (без обращения к модели)
+    location = /healthz { return 200 "ok\n"; }
+
+    location / {
+        if ($api_key_ok = 0) {
+            return 401 '{"error":{"message":"invalid or missing API key","type":"unauthorized"}}';
+        }
+        limit_req zone=api burst=20 nodelay;
+
+        proxy_pass http://llm:{{ llm_internal_port }};
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header Authorization "";   # ключ шлюза не уходит в движок
+        proxy_buffering off;                 # стриминг (SSE) без задержек
+        proxy_read_timeout 600s;
+    }
+}

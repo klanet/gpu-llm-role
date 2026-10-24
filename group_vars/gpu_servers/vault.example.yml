@@ -1,0 +1,5 @@
+# cp vault.example.yml vault.yml && ansible-vault encrypt vault.yml
+---
+llm_api_keys:
+  - "sk-REPLACE-ME-with-output-of-openssl-rand-hex-32"
+hf_token: ""            # нужен только для gated-моделей (Llama и т.п.)

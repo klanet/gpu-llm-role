@@ -1,0 +1,48 @@
+---
+- name: Blacklist nouveau
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/blacklist-nouveau.conf
+    mode: "0644"
+    content: |
+      blacklist nouveau
+      options nouveau modeset=0
+  notify: update initramfs
+
+- name: Apply handlers before driver install
+  ansible.builtin.meta: flush_handlers
+
+- name: Install NVIDIA driver
+  ansible.builtin.apt:
+    name: "{{ nvidia_driver_package }}"
+    state: present
+    update_cache: true
+
+- name: Check if driver is loaded
+  ansible.builtin.command: nvidia-smi -L
+  register: nvidia_smi
+  changed_when: false
+  failed_when: false
+
+- name: Reboot to load the driver
+  ansible.builtin.reboot:
+    reboot_timeout: 900
+  when: nvidia_smi.rc != 0 and nvidia_allow_reboot
+
+- name: Verify GPU is visible after install
+  ansible.builtin.command: nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader
+  register: nvidia_smi_final
+  changed_when: false
+  retries: 6
+  delay: 10
+  until: nvidia_smi_final.rc == 0
+
+- name: Show detected GPUs
+  ansible.builtin.debug:
+    msg: "{{ nvidia_smi_final.stdout_lines }}"
+
+- name: Enable NVIDIA persistence daemon (faster cold start, stable GPU state)
+  ansible.builtin.systemd:
+    name: nvidia-persistenced
+    enabled: true
+    state: started
+  failed_when: false

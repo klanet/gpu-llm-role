@@ -1,0 +1,9 @@
+---
+- name: Provision GPU server and deploy LLM API
+  hosts: gpu_servers
+  become: true
+  roles:
+    - { role: common,        tags: [common] }
+    - { role: nvidia_driver, tags: [nvidia] }
+    - { role: docker_nvidia, tags: [docker] }
+    - { role: llm_stack,     tags: [llm] }

@@ -1,0 +1,22 @@
+# Ansible Vault secrets - НИКОГДА не коммитьте расшифрованные секреты!
+# vault.yml зашифрован через ansible-vault и безопасен для коммита,
+# но лучше держать его вне репозитория или использовать SOPS/HashiCorp Vault
+group_vars/**/vault.yml
+group_vars/**/vault.yml.decrypted
+
+# Временные файлы Ansible
+*.retry
+.ansible/
+*.pyc
+__pycache__/
+
+# Локальные переопределения (если используете)
+group_vars/**/vars.local.yml
+inventory/hosts.local.yml
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*~

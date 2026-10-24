@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Managed by Ansible. Проверяет API и GPU; после 3 подряд неудач перезапускает контейнер модели.
+set -u
+STATE=/run/llm-healthcheck.fails
+URL="{{ api_scheme }}://127.0.0.1:{{ api_port }}/v1/models"
+KEY="{{ llm_api_keys | first }}"
+
+fails=$(cat "$STATE" 2>/dev/null || echo 0)
+
+if curl -ksf --max-time 15 -H "Authorization: Bearer ${KEY}" "$URL" >/dev/null \
+   && nvidia-smi -L >/dev/null 2>&1; then
+  echo 0 > "$STATE"
+  exit 0
+fi
+
+fails=$((fails + 1))
+echo "$fails" > "$STATE"
+logger -t llm-healthcheck "check failed (${fails}/3)"
+
+if [ "$fails" -ge 3 ]; then
+  logger -t llm-healthcheck "restarting llm container"
+  docker compose -f {{ llm_dir }}/docker-compose.yml restart llm
+  echo 0 > "$STATE"
+fi
+exit 1

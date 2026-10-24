@@ -1,0 +1,8 @@
+[Unit]
+Description=LLM API healthcheck / watchdog
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/llm-healthcheck

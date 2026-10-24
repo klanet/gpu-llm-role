@@ -1,0 +1,21 @@
+# ansible-lint configuration
+# Запуск: ansible-lint
+
+skip_list:
+  - no-changed-when   # допускаем changed_when: false для проверок
+  - risky-shell-pipe  # допускаем pipe в shell для удобства
+  - command-instead-of-module  # иногда command удобнее модуля
+
+# Исключаем проверки для generated/managed файлов
+exclude_paths:
+  - .git/
+  - .venv/
+  - venv/
+
+# Правила
+yamllint:
+  # Отключаем правило про длину строки для плейбуков
+  max-line-length: 160
+
+# Требовать become: true для задач, меняющих систему
+require_become: true
