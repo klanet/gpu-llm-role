@@ -9,7 +9,7 @@
 | Требование задачи | Реализация |
 |-------------------|------------|
 | **ОС — Linux, GPU — NVIDIA** | Поддержка Ubuntu 22.04+, Debian 11+, RHEL 8/9, Rocky/AlmaLinux 8/9, Fedora, Arch Linux; проверка GPU на PCI шине |
-| **Настроить драйверы** | Роль `nvidia_driver`: blacklist nouveau, драйвер из репозитория ОС, persistence-демон, авто-reboot при необходимости |
+| **Настроить драйверы** | Роль `nvidia_driver`: kernel headers + DKMS, blacklist nouveau, драйвер из репозитория ОС, persistence-демон, автозагрузка модулей, DRM modeset, авто-reboot, проверка Secure Boot — **полностью автоматизировано, ручных шагов нет** |
 | **Настроить Docker и окружение** | Роль `docker_nvidia`: Docker CE/Engine + Compose plugin, NVIDIA Container Toolkit, тест `docker run --gpus all nvidia-smi` |
 | **Развернуть AI-модель (Ollama / vLLM)** | Роль `llm_stack`: docker-compose с выбором движка (`llm_engine: vllm \| ollama`), моделью (`llm_model`), автозагрузкой весов |
 | **Автоматический запуск** | Docker в systemd, контейнеры `restart: unless-stopped` → стек поднимается после перезагрузки |
@@ -105,7 +105,11 @@ ansible-playbook site.yml --check --diff  # dry-run
 
 ```yaml
 # ───────── NVIDIA ─────────
-nvidia_driver_package: nvidia-driver-570-server  # должен поддерживать CUDA образа
+# nvidia_driver_package задаётся АВТОМАТИЧЕСКИ из group_vars/all/distro.yml
+# в зависимости от ОС. Можно переопределить:
+# nvidia_driver_package: nvidia-driver-570-server  # Ubuntu/Debian
+# nvidia_driver_package: nvidia-driver             # RHEL/Rocky/Alma
+# nvidia_driver_package: nvidia                    # Arch
 nvidia_allow_reboot: true                        # ребут если драйвер не загрузился
 
 # ───────── LLM ─────────
@@ -191,7 +195,8 @@ print(r.choices[0].message.content)
 nvidia-smi                                    # драйвер
 docker compose -f /opt/llm/docker-compose.yml ps  # контейнеры
 docker logs -f llm                            # логи модели (загрузка весов)
-curl -k https://localhost/healthz             # живость шлюза
+curl -k https://localhost/health/liveliness   # живость LiteLLM gateway
+curl -k -H "Authorization: Bearer sk-<key>" https://localhost/v1/models  # модель доступна
 systemctl list-timers llm-healthcheck.timer   # watchdog таймер
 journalctl -t llm-healthcheck                 # события автовосстановления
 ```
@@ -247,6 +252,8 @@ journalctl -t llm-healthcheck                 # события автовосс�
 
 | Ситуация | Решение |
 |----------|---------|
+| **Secure Boot включён** | Драйвер установится, но не загрузится. Плейбук выведет предупреждение. Выполните один раз: `mokutil --import /var/lib/shim-signed/mok/MOK.der && reboot` (путь может отличаться) |
+| **Обновление ядра ОС** | DKMS автоматически пересоберёт модуль NVIDIA при следующем обновлении системы (`apt upgrade` / `dnf update` / `pacman -Syu`) |
 | Старые GPU (T4, V100, Turing) | Нет bf16 → `--dtype half`; для vLLM ставить `vllm_env: { VLLM_USE_V1: "0" }` или использовать Ollama |
 | Мало VRAM (16 ГБ) | 7B fp16 ≈ 15 ГБ → берите AWQ/GPTQ кванты, уменьшайте `--max-model-len` |
 | Gated-модели (Llama) | Добавьте `hf_token` в vault |
