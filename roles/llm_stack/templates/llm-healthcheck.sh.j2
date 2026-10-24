@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Managed by Ansible. Проверяет API и GPU; после 3 подряд неудач перезапускает контейнер модели.
 set -u
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 STATE=/run/llm-healthcheck.fails
 URL="{{ api_scheme }}://127.0.0.1:{{ api_port }}/v1/models"
 KEY="{{ llm_api_keys | first }}"
+COMPOSE_FILE="{{ llm_dir }}/docker-compose.yml"
 
 fails=$(cat "$STATE" 2>/dev/null || echo 0)
 
@@ -19,7 +21,11 @@ logger -t llm-healthcheck "check failed (${fails}/3)"
 
 if [ "$fails" -ge 3 ]; then
   logger -t llm-healthcheck "restarting llm container"
-  docker compose -f {{ llm_dir }}/docker-compose.yml restart llm
+  if command -v docker >/dev/null && docker compose -f "${COMPOSE_FILE}" restart llm; then
+    logger -t llm-healthcheck "restart succeeded"
+  else
+    logger -t llm-healthcheck "restart FAILED"
+  fi
   echo 0 > "$STATE"
 fi
 exit 1

@@ -233,6 +233,7 @@ journalctl -t llm-healthcheck                 # события автовосс�
 | Старые GPU (T4, V100, Turing) | Нет bf16 → `--dtype half`; для vLLM ставить `vllm_env: { VLLM_USE_V1: "0" }` или использовать Ollama |
 | Мало VRAM (16 ГБ) | 7B fp16 ≈ 15 ГБ → берите AWQ/GPTQ кванты, уменьшайте `--max-model-len` |
 | Gated-модели (Llama) | Добавьте `hf_token` в vault |
+| Ollama: неверный формат модели | Указывайте тег (`qwen2.5:7b-instruct`), а не HF ID (`Qwen/...`) |
 | Смена драйвера | При `nvidia_allow_reboot: true` сервер перезагрузится — планируйте окно |
 | Версии образов | Закреплены в vars — проверяйте актуальные теги перед запуском |
 

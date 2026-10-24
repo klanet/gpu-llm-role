@@ -59,7 +59,7 @@ services:
     image: {{ nginx_image }}
     depends_on:
       llm:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "{{ api_bind }}:{{ api_port }}:{{ 443 if api_tls_enabled else 80 }}"
     volumes:

@@ -13,7 +13,7 @@
 
 - name: Generate self-signed TLS certificate (replace with a real one in production)
   ansible.builtin.command: >
-    openssl req -x509 -nodes -newkey rsa:4096 -days 825
+    openssl req -x509 -nodes -newkey rsa:4096 -days 365
     -subj "/CN={{ inventory_hostname }}"
     -keyout {{ llm_dir }}/certs/tls.key -out {{ llm_dir }}/certs/tls.crt
   args:
@@ -61,6 +61,17 @@
   delay: 6
   until: ollama_pull.rc == 0
   when: llm_engine == 'ollama'
+
+- name: Check GPU memory before deploy (warn if less than 16GB for 7B models)
+  ansible.builtin.command: nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits
+  register: gpu_mem
+  changed_when: false
+  failed_when: false
+
+- name: Warn if GPU memory may be insufficient
+  ansible.builtin.debug:
+    msg: "ВНИМАНИЕ: GPU VRAM {{ gpu_mem.stdout }} МБ — для 7B модели (fp16/AWQ) рекомендуется 16+ ГБ"
+  when: gpu_mem.stdout is defined and gpu_mem.stdout | int < 15000
 
 - name: Wait for gateway port
   ansible.builtin.wait_for:

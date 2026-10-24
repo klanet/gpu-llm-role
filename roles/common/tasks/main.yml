@@ -28,6 +28,20 @@
     fail_msg: "Задайте llm_api_keys в group_vars/gpu_servers/vault.yml"
   no_log: true
 
+- name: Validate Ollama model name format (must be tag like 'qwen2.5:7b-instruct', not HF ID)
+  ansible.builtin.assert:
+    that:
+      - llm_engine != 'ollama' or (llm_model is search(':'))
+    fail_msg: "Для Ollama укажите тег модели (например 'qwen2.5:7b-instruct'), а не HF ID"
+  when: llm_engine == 'ollama'
+
+- name: Validate vLLM model name format (must be HF ID like 'org/model', not tag)
+  ansible.builtin.assert:
+    that:
+      - llm_engine != 'vllm' or (llm_model is search('/'))
+    fail_msg: "Для vLLM укажите HF ID модели (например 'Qwen/Qwen2.5-7B-Instruct-AWQ'), а не тег"
+  when: llm_engine == 'vllm'
+
 - name: Do not auto-upgrade GPU stack (driver/Docker upgrades only via playbook)
   ansible.builtin.copy:
     dest: /etc/apt/apt.conf.d/52-gpu-blacklist
